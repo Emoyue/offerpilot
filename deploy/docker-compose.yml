@@ -1,0 +1,169 @@
+# =============================================================================
+# OfferPilot - 基础设施一键部署
+# MySQL 8.0 + Redis 7 + MinIO（S3 兼容对象存储）
+#
+# 一键启动：  docker compose up -d
+# 查看状态：  docker compose ps
+# 停止：      docker compose stop        （保留数据）
+# 销毁：      docker compose down        （保留数据卷）
+#             docker compose down -v     （连数据一起删除，慎用）
+#
+# 变量来源：同目录 .env（由 env/.env.example 复制而来），未配置时使用本文件默认值。
+# 说明：host 端口可用 .env 调整；MySQL 默认映射 3307，以避开本机已安装的 MySQL80(3306)。
+# =============================================================================
+
+name: yszx
+
+services:
+  # ---------------------------------------------------------------- MySQL 8.0
+  mysql:
+    image: mysql:8.0
+    container_name: yszx-mysql
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+08:00
+      - --explicit_defaults_for_timestamp=1
+      # 与 Windows 本机 MySQL 行为一致，避免大小写导致“表不存在”
+      # 注意：该参数只在数据目录初始化时生效，卷已存在后不可修改
+      - --lower_case_table_names=1
+      - --max-connections=300
+    environment:
+      TZ: Asia/Shanghai
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-yszx_root_2024}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-yszx}
+      MYSQL_USER: ${MYSQL_USER:-yszx}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-yszx_2024}
+    ports:
+      - "${MYSQL_PORT:-3307}:3306"
+    volumes:
+      - yszx-mysql-data:/var/lib/mysql
+      # 首次初始化（数据卷为空）时自动执行的 SQL，文件按名称顺序执行
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysqladmin ping -h 127.0.0.1 -u root -p"$$MYSQL_ROOT_PASSWORD" --silent
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - yszx-net
+
+  # ------------------------------------------------------------------- Redis 7
+  redis:
+    image: redis:7-alpine
+    container_name: yszx-redis
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --requirepass
+      - ${REDIS_PASSWORD:-yszx_redis_2024}
+      - --maxmemory
+      - ${REDIS_MAXMEMORY:-512mb}
+      # 登录态/验证码/配额都在 Redis，这里用 allkeys-lru：
+      # 内存吃紧时优先淘汰普通缓存，不会像 noeviction 那样直接写失败
+      - --maxmemory-policy
+      - allkeys-lru
+      # 关闭 RDB 覆盖式快照间隔过密的问题，保留两档兜底快照
+      - --save
+      - "900 1"
+      - --save
+      - "300 10"
+    environment:
+      TZ: Asia/Shanghai
+      # healthcheck 中 redis-cli 通过该变量取密码，避免密码出现在进程参数里
+      REDISCLI_AUTH: ${REDIS_PASSWORD:-yszx_redis_2024}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - yszx-redis-data:/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - redis-cli --no-auth-warning ping | grep -q PONG
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - yszx-net
+
+  # --------------------------------------------------------------------- MinIO
+  # 说明：MinIO 官方已在 2025 年下架 Docker Hub 镜像与免费二进制（dl.min.io 返回 410），
+  # 这里用 Bitnami 归档镜像：内置 minio RELEASE.2024-12-18 + mc + curl，带 Web 控制台。
+  # 注意：该仓库的 latest 是 2025.5.24，已移除内置控制台（9001 会返回空白），务必锁版本。
+  # 若你已有可用的 minio/minio 镜像源，改 MINIO_IMAGE 即可切换（注意数据目录差异见 README）。
+  minio:
+    image: ${MINIO_IMAGE:-bitnamilegacy/minio:2024.12.18-debian-12-r0}
+    container_name: yszx-minio
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-yszx_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-yszx_minio_2024}
+      MINIO_API_PORT_NUMBER: "9000"
+      MINIO_CONSOLE_PORT_NUMBER: "9001"
+      MINIO_DATA_DIR: /bitnami/minio/data
+      MINIO_SKIP_CLIENT: "yes"        # 建桶交给 minio-init 统一做，避免并发重复创建
+      MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL:-http://localhost:9001}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"     # S3 API
+      - "${MINIO_CONSOLE_PORT:-9001}:9001" # Web 控制台
+    volumes:
+      - yszx-minio-data:/bitnami/minio/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -fsS http://127.0.0.1:9000/minio/health/live || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - yszx-net
+
+  # ------------------------------------------------- 初始化 MinIO（建桶+访问策略）
+  # 一次性任务：创建业务桶、开放匿名读（图片可直链访问），执行完即退出
+  minio-init:
+    image: ${MINIO_IMAGE:-bitnamilegacy/minio:2024.12.18-debian-12-r0}
+    container_name: yszx-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb --ignore-existing local/$$MINIO_BUCKET
+        mc anonymous set download local/$$MINIO_BUCKET
+        echo "[minio-init] bucket $$MINIO_BUCKET ready"
+    environment:
+      TZ: Asia/Shanghai
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-yszx_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-yszx_minio_2024}
+      MINIO_BUCKET: ${MINIO_BUCKET:-yszx}
+    networks:
+      - yszx-net
+    restart: "no"
+
+volumes:
+  yszx-mysql-data:
+    name: yszx-mysql-data
+  yszx-redis-data:
+    name: yszx-redis-data
+  yszx-minio-data:
+    name: yszx-minio-data
+
+networks:
+  yszx-net:
+    name: yszx-net
+    driver: bridge

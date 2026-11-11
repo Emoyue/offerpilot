@@ -1,0 +1,92 @@
+server:
+  port: 8080
+  shutdown: graceful
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+spring:
+  application:
+    name: offerpilot
+  profiles:
+    active: dev
+  jackson:
+    time-zone: UTC
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*.xml
+  type-aliases-package: com.yunshu.zhixue.modules
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto
+      logic-delete-field: deleteFlag
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: method
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+app:
+  # 后台「重置密码」使用的默认密码（Q9：部署期配置，不落 system_setting 表）
+  # 生产环境用环境变量 ADMIN_DEFAULT_PASSWORD 覆盖，不要沿用仓库里的默认值
+  default-password: ${ADMIN_DEFAULT_PASSWORD:Offer@2026}
+  # 双端独立 JWT 域（D7、D12）：令牌互不通用，aud 分别标记 portal / admin
+  jwt:
+    issuer: offerpilot
+    portal:
+      secret: ${JWT_PORTAL_SECRET:yszx-portal-dev-secret-key-please-change-in-prod-32bytes}
+      access-ttl: 2h
+      refresh-ttl: 14d
+    admin:
+      secret: ${JWT_ADMIN_SECRET:yszx-admin-dev-secret-key-please-change-in-prod-32bytes}
+      access-ttl: 2h
+      refresh-ttl: 14d
+  # 对象存储（S3 兼容）：本地 MinIO，生产可换云 OSS/COS，仅改配置
+  storage:
+    endpoint: ${MINIO_ENDPOINT:http://127.0.0.1:9000}
+    access-key: ${MINIO_ACCESS_KEY:yszx_minio}
+    secret-key: ${MINIO_SECRET_KEY:yszx_minio_2024}
+    bucket: ${MINIO_BUCKET:yszx}
+    public-url: ${MINIO_PUBLIC_URL:http://127.0.0.1:9000}
+  # AI 能力层（OpenAI 兼容协议，D15）；密钥只走环境变量，不落库
+  ai:
+    base-url: ${AI_BASE_URL:https://api.example.com/v1}
+    api-key: ${AI_API_KEY:}
+    model: ${AI_MODEL:}
+    timeout-seconds: 60
+  # 业务固定阈值（D13，不做后台可配置）
+  quota:
+    daily-interview-times: 5
+
+logging:
+  level:
+    root: info
+    com.yunshu.zhixue: info

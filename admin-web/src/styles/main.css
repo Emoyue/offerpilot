@@ -1,0 +1,49 @@
+/**
+ * 管理端全局样式与主题变量。
+ */
+:root {
+  --yszx-primary: #6366f1;
+  --yszx-primary-soft: #eef2ff;
+  --yszx-text: #1f2430;
+  --yszx-text-secondary: #4b5563;
+  --yszx-text-tertiary: #9ca3af;
+  --yszx-border: #e5e7eb;
+  --yszx-bg: #f7f8fa;
+
+  --el-color-primary: #6366f1;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--yszx-bg);
+  color: var(--yszx-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #f1f2f6;
+  font-family: 'JetBrains Mono', Consolas, Monaco, monospace;
+  font-size: 12px;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 500;
+}

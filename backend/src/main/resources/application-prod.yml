@@ -1,0 +1,45 @@
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${DB_HOST:mysql}:${DB_PORT:3306}/${DB_NAME:yszx}?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC&useSSL=false&rewriteBatchedStatements=true
+    username: ${DB_USERNAME:yszx}
+    password: ${DB_PASSWORD:}
+    hikari:
+      pool-name: yszx-hikari
+      minimum-idle: 10
+      maximum-pool-size: 50
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+      timeout: 3s
+
+app:
+  jwt:
+    portal:
+      secret: ${JWT_PORTAL_SECRET}
+    admin:
+      secret: ${JWT_ADMIN_SECRET}
+  storage:
+    endpoint: ${MINIO_ENDPOINT:http://minio:9000}
+    access-key: ${MINIO_ACCESS_KEY}
+    secret-key: ${MINIO_SECRET_KEY}
+    bucket: ${MINIO_BUCKET:yszx}
+    public-url: ${MINIO_PUBLIC_URL}
+  ai:
+    base-url: ${AI_BASE_URL}
+    api-key: ${AI_API_KEY}
+    model: ${AI_MODEL}
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+logging:
+  level:
+    root: warn
+    com.yunshu.zhixue: info

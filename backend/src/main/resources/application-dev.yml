@@ -1,0 +1,43 @@
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://127.0.0.1:3307/yszx?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true&zeroDateTimeBehavior=convertToNull
+    username: yszx
+    password: yszx_2024
+    hikari:
+      pool-name: yszx-hikari
+      minimum-idle: 5
+      maximum-pool-size: 20
+      connection-timeout: 10000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      password: yszx_redis_2024
+      database: 0
+      timeout: 3s
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+
+app:
+  storage:
+    endpoint: http://127.0.0.1:9000
+    access-key: yszx_minio
+    secret-key: yszx_minio_2024
+    bucket: yszx
+    public-url: http://127.0.0.1:9000
+
+mybatis-plus:
+  configuration:
+    # 开发期打印 SQL，便于核对字段与逻辑删除条件
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+logging:
+  level:
+    com.yunshu.zhixue: debug
+    org.springframework.security: warn
